@@ -9,10 +9,6 @@ function isPackageJson() {
   return pathnameParts[3] === 'blob' && pathnameParts.pop() === 'package.json';
 }
 
-function hasPackageJson() {
-  return Boolean(getPackageURL());
-}
-
 function getPackageURL() {
   if (isPackageJson()) {
     return location.origin + location.pathname;
@@ -29,23 +25,47 @@ function getPackageURL() {
   `)?.href;
 }
 
+let app;
+
 async function init() {
-  if (
-    document.querySelector('.npmhub-header')
-    || !hasPackageJson()
-  ) {
+  const packageURL = getPackageURL();
+
+  // GitHub's React navigation keeps our container around, so only re-render when the package.json changes
+  const container = document.querySelector('.npmhub-container');
+  if (container?.dataset.packageUrl === packageURL) {
     return;
   }
 
-  new App({
+  app?.$destroy();
+  app = undefined;
+  container?.remove();
+
+  if (!packageURL) {
+    return;
+  }
+
+  const target = document.createElement('div');
+  target.className = 'npmhub-container';
+  target.dataset.packageUrl = packageURL;
+  const parent = [
+    '#repo-content-turbo-frame',
+    '.repository-content', // Old container https://github.com/refined-github/refined-github/issues/5751
+    '#repos-split-pane-content', // React layout, no Turbo frame
+    'main',
+  ].map(selector => document.querySelector(selector)).find(Boolean);
+  if (!parent) {
+    console.error('npmhub: could not find where to add the dependency list on', location.href);
+    return;
+  }
+
+  parent.append(target);
+
+  app = new App({
     props: {
       isPackageJson: isPackageJson(),
-      packageURL: getPackageURL(),
+      packageURL,
     },
-    target: document.querySelector([
-      '#repo-content-turbo-frame',
-      '.repository-content', // Old container https://github.com/refined-github/refined-github/issues/5751
-    ]),
+    target,
   });
 
   const position = document.querySelector(['.BorderGrid-cell [href$=\'/forks\']'])?.parentElement;
@@ -60,3 +80,7 @@ async function init() {
 }
 
 githubInjection(init);
+
+// GitHub's React navigation doesn't fire the Turbo/pjax events that `github-injection` listens to
+document.addEventListener('soft-nav:end', init);
+document.addEventListener('soft-nav:react-done', init); // Also fired on back/forward
