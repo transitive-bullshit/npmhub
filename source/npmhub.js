@@ -26,35 +26,39 @@ function getPackageURL() {
 }
 
 let app;
+let appRoot;
 let lastPackageURL;
 
 async function init() {
   const packageURL = getPackageURL();
 
-  // GitHub's React navigation keeps our list around, so only re-render when the package.json changes
-  if (packageURL === lastPackageURL) {
+  // GitHub's React navigation keeps our list around, so only re-render when the package.json changes or the list was removed
+  if (packageURL === lastPackageURL && (!packageURL || appRoot?.isConnected)) {
     return;
   }
 
   app?.$destroy();
   app = undefined;
+  appRoot = undefined;
   lastPackageURL = packageURL;
 
   if (!packageURL) {
     return;
   }
 
+  const target = $([
+    '#repo-content-turbo-frame',
+    '.repository-content', // Old container https://github.com/refined-github/refined-github/issues/5751
+    '#repos-split-pane-content', // React layout, no Turbo frame
+  ]);
   app = new App({
     props: {
       isPackageJson: isPackageJson(),
       packageURL,
     },
-    target: $([
-      '#repo-content-turbo-frame',
-      '.repository-content', // Old container https://github.com/refined-github/refined-github/issues/5751
-      '#repos-split-pane-content', // React layout, no Turbo frame
-    ]),
+    target,
   });
+  appRoot = target.lastElementChild;
 
   const position = $optional(['.BorderGrid-cell [href$=\'/forks\']'])?.parentElement;
 
@@ -72,3 +76,10 @@ init();
 // https://github.com/refined-github/refined-github/blob/6c88bc3e4d29453d564c0466096ac97341b47529/source/feature-manager.tsx#L172
 document.addEventListener('turbo:render', init);
 document.addEventListener('soft-nav:react-done', init); // Also fired on back/forward
+
+// React discards our list when it hydrates server-rendered pages, without firing any navigation event
+new MutationObserver(() => {
+  if (appRoot && !appRoot.isConnected) {
+    init();
+  }
+}).observe(document.body, {childList: true, subtree: true});
