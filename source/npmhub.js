@@ -1,4 +1,4 @@
-import githubInjection from 'github-injection';
+import {$, $optional, elementExists} from 'select-dom';
 import App from './components/App.svelte';
 import ScrollButton from './components/ScrollButton.svelte';
 
@@ -26,51 +26,39 @@ function getPackageURL() {
 }
 
 let app;
+let lastPackageURL;
 
 async function init() {
   const packageURL = getPackageURL();
 
-  // GitHub's React navigation keeps our container around, so only re-render when the package.json changes
-  const container = document.querySelector('.npmhub-container');
-  if (container?.dataset.packageUrl === packageURL) {
+  // GitHub's React navigation keeps our list around, so only re-render when the package.json changes
+  if (packageURL === lastPackageURL) {
     return;
   }
 
   app?.$destroy();
   app = undefined;
-  container?.remove();
+  lastPackageURL = packageURL;
 
   if (!packageURL) {
     return;
   }
-
-  const target = document.createElement('div');
-  target.className = 'npmhub-container';
-  target.dataset.packageUrl = packageURL;
-  const parent = [
-    '#repo-content-turbo-frame',
-    '.repository-content', // Old container https://github.com/refined-github/refined-github/issues/5751
-    '#repos-split-pane-content', // React layout, no Turbo frame
-    'main',
-  ].map(selector => document.querySelector(selector)).find(Boolean);
-  if (!parent) {
-    console.error('npmhub: could not find where to add the dependency list on', location.href);
-    return;
-  }
-
-  parent.append(target);
 
   app = new App({
     props: {
       isPackageJson: isPackageJson(),
       packageURL,
     },
-    target,
+    target: $([
+      '#repo-content-turbo-frame',
+      '.repository-content', // Old container https://github.com/refined-github/refined-github/issues/5751
+      '#repos-split-pane-content', // React layout, no Turbo frame
+    ]),
   });
 
-  const position = document.querySelector(['.BorderGrid-cell [href$=\'/forks\']'])?.parentElement;
+  const position = $optional(['.BorderGrid-cell [href$=\'/forks\']'])?.parentElement;
 
-  if (position) {
+  if (position && !elementExists('[href="#dependencies"]', position.parentElement)) {
     const frag = document.createDocumentFragment();
 
     new ScrollButton({target: frag});
@@ -79,8 +67,8 @@ async function init() {
   }
 }
 
-githubInjection(init);
+init();
 
-// GitHub's React navigation doesn't fire the Turbo/pjax events that `github-injection` listens to
-document.addEventListener('soft-nav:end', init);
+// https://github.com/refined-github/refined-github/blob/6c88bc3e4d29453d564c0466096ac97341b47529/source/feature-manager.tsx#L172
+document.addEventListener('turbo:render', init);
 document.addEventListener('soft-nav:react-done', init); // Also fired on back/forward

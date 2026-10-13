@@ -36,7 +36,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         error: error.message, // Make error JSON.stringify-able
       });
 
-      console.error(`npmhub: could not fetch ${message.fetchPackageInfo} from npm`, error);
+      // Throw it again so it appears in the background console
+      throw error;
     });
 
     return true; // Required to signal intent to respond asynchronously
