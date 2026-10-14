@@ -76,10 +76,3 @@ init();
 // https://github.com/refined-github/refined-github/blob/6c88bc3e4d29453d564c0466096ac97341b47529/source/feature-manager.tsx#L172
 document.addEventListener('turbo:render', init);
 document.addEventListener('soft-nav:react-done', init); // Also fired on back/forward
-
-// React discards our list when it hydrates server-rendered pages, without firing any navigation event
-new MutationObserver(() => {
-  if (appRoot && !appRoot.isConnected) {
-    init();
-  }
-}).observe(document.body, {childList: true, subtree: true});
